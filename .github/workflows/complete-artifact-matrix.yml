@@ -81,7 +81,9 @@ jobs:
       - name: Determine version
         id: version
         env:
-          GH_TOKEN: ${{ secrets.ACCESS_TOKEN }}
+          # reading releases only needs the built-in token; ACCESS_TOKEN (cross-repo write)
+          # is only required later, to create/upload the release itself.
+          GH_TOKEN: ${{ secrets.ACCESS_TOKEN || github.token }}
         run: |
           set -euo pipefail
           REPO="armbian/${{ env.RELEASE_REPOSITORY }}"
