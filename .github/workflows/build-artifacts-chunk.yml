@@ -46,10 +46,7 @@ jobs:
         with:
           registry: ghcr.io
           username: "${{ github.repository_owner }}" # GitHub username or org
-          # PAT with write:packages on the org so artifacts push to ghcr.io/armbian/os/*;
-          # the builtin GITHUB_TOKEN can't write packages outside this repo. Falls back to
-          # the builtin token when ACCESS_TOKEN is unset.
-          password: "${{ secrets.ACCESS_TOKEN || secrets.GITHUB_TOKEN }}"
+          password: "${{ secrets.GITHUB_TOKEN }}"    # GitHub actions builtin token. repo has to have pkg access.
 
       # cleanup the place where we will clone the userpatches repo, to avoid git going insane and cleaning everything later
       - name: Cleanup userpatches repo
