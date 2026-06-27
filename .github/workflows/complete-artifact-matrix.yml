@@ -40,7 +40,7 @@ env:
   DOCKER_SKIP_UPDATE: "yes"
   EXTRA_PARAMS_ALL_BUILDS: "${{ github.event.inputs.extraParamsAllBuilds || 'UPLOAD_TO_OCI_ONLY=yes' }}"
   TARGET_PATH: "${{ inputs.target_path }}"
-  GH_TOKEN: "${{ secrets.ACCESS_TOKEN }}"
+  GH_TOKEN: "${{ secrets.ACCESS_TOKEN || github.token }}"
   EXTRA_PARAMS_IMAGE: "SHARE_LOG=yes "
 
 jobs:
@@ -86,7 +86,7 @@ jobs:
           GH_TOKEN: ${{ secrets.ACCESS_TOKEN || github.token }}
         run: |
           set -euo pipefail
-          REPO="armbian/${{ env.RELEASE_REPOSITORY }}"
+          REPO="${{ github.repository }}"
           OVERRIDE="${{ github.event.inputs.versionOverride }}"
           NIGHTLY="${{ github.event.inputs.nightlybuild || inputs.nightlybuild_default }}"
 
@@ -142,13 +142,13 @@ jobs:
         if: ${{ (github.event.inputs.skipImages || inputs.skipimages_default) != 'yes' }}
         uses: softprops/action-gh-release@v2
         with:
-          repository: "armbian/${{ env.RELEASE_REPOSITORY }}"
+          repository: ${{ github.repository }}
           tag_name: "${{ steps.version.outputs.version }}"
           name: "${{ steps.version.outputs.version }}"
           body_path: body.html
           prerelease: ${{ steps.version.outputs.prerelease }}
           make_latest: false
-          token: ${{ secrets.ACCESS_TOKEN }}
+          token: ${{ secrets.ACCESS_TOKEN || github.token }}
 
     outputs:
       version: ${{ steps.version.outputs.version }}
@@ -554,11 +554,11 @@ jobs:
         if: ${{ (github.event.inputs.skipImages || inputs.skipimages_default) != 'yes' && (github.event.inputs.nightlybuild || inputs.nightlybuild_default) == 'yes' }}
         uses: softprops/action-gh-release@v2
         with:
-          repository: "armbian/${{ env.RELEASE_REPOSITORY }}"
+          repository: ${{ github.repository }}
           tag_name: "${{ env.version }}"
           prerelease: false
           make_latest: true
-          token: "${{ secrets.ACCESS_TOKEN }}"
+          token: "${{ secrets.ACCESS_TOKEN || github.token }}"
 
       - name: "Run repository mirroring to CDN"
         if: ${{ (github.event.inputs.skipImages || inputs.skipimages_default) == 'no' }}
@@ -567,7 +567,7 @@ jobs:
           token: ${{ secrets.DISPATCH }}
           repository: armbian/armbian.github.io
           event-type: "Infrastructure: Mirror artifacts"
-          client-payload: '{"pull_repository": "armbian/${{ env.RELEASE_REPOSITORY }}", "cdn_tag": "${{ env.RELEASE_REPOSITORY }}"}'
+          client-payload: '{"pull_repository": "${{ github.repository }}", "cdn_tag": "${{ env.RELEASE_REPOSITORY }}"}'
 
       - name: "Run webindex update action"
         if: ${{ (github.event.inputs.skipImages || inputs.skipimages_default) == 'no' }}
