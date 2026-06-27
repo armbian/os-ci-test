@@ -2,39 +2,12 @@
 name: "Build All Artifacts (cronjob)"
 
 on:
+  # No dispatch inputs: "build all artifacts" always runs with the fixed defaults
+  # below (skipImages=yes, checkOci=yes, nightlybuild=yes, framework branch=main,
+  # no targets filter, no version override) — nothing to select or override.
+  # complete-artifact-matrix.yml reads each as `github.event.inputs.X || <default>`,
+  # so with no inputs it falls back to exactly those values.
   workflow_dispatch:
-    inputs:
-      skipImages:
-        description: 'Skip building images? no = build images, yes = skip images'
-        type: choice
-        options: [ 'yes', 'no' ]
-        default: 'yes'
-      checkOci:
-        description: 'Check OCI for existing artifacts? yes = check OCI, no = always build everything'
-        type: choice
-        options: [ 'yes', 'no' ]
-        default: 'yes'
-      extraParamsAllBuilds:
-        description: 'Extra params for all builds/jobs (eg: DEBUG=yes)'
-        type: string
-        default: ''
-      branch:
-        description: 'Framework build branch'
-        type: string
-        default: 'main'
-      targetsFilterInclude:
-        description: 'TARGETS_FILTER_INCLUDE, example: "BOARD:odroidhc4,BOARD:odroidn2"'
-        type: string
-        default: ''
-      nightlybuild:
-        description: 'yes = nightly, no = stable'
-        type: choice
-        options: [ 'yes', 'no' ]
-        default: 'yes'
-      versionOverride:
-        description: 'Version override'
-        type: string
-        default: ''
 
 concurrency:
   group: pipeline
