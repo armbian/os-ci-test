@@ -211,10 +211,13 @@ jobs:
         id: cache-restore
         uses: actions/cache@v6
         with:
+          # The build framework runs in build/ (checkout path: build), so its caches
+          # live under build/cache/* — must match, or this caches empty dirs and the
+          # OCI-existence memoization never persists across runs.
           path: |
-            cache/memoize
-            cache/oci/positive
-          key: ${{ runner.os }}-matrix-cache-${{ github.sha }}-${{ steps.latest-commit.outputs.sha1 }}"
+            build/cache/memoize
+            build/cache/oci/positive
+          key: ${{ runner.os }}-matrix-cache-${{ github.sha }}-${{ steps.latest-commit.outputs.sha1 }}
           restore-keys: |
             ${{ runner.os }}-matrix-cache-
 
