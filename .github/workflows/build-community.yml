@@ -1,5 +1,5 @@
-# Track caller: Build Community Images (cronjob). Thin wrapper over complete-artifact-matrix.yml.
-name: "Build Community Images (cronjob)"
+# Track caller: Build Community Images. Thin wrapper over complete-artifact-matrix.yml.
+name: "Build Community Images"
 
 on:
   workflow_dispatch:

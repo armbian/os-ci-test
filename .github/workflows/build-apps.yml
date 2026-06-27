@@ -1,5 +1,5 @@
-# Track caller: Build Apps Images (cronjob). Thin wrapper over complete-artifact-matrix.yml.
-name: "Build Apps Images (cronjob)"
+# Track caller: Build Apps Images. Thin wrapper over complete-artifact-matrix.yml.
+name: "Build Apps Images"
 
 on:
   workflow_dispatch:

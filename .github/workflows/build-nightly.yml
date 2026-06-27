@@ -1,5 +1,5 @@
 # Track caller: nightly images. Thin wrapper over complete-artifact-matrix.yml.
-name: "Build Nightly Images (cronjob)"
+name: "Build Nightly Images"
 
 on:
   workflow_dispatch:

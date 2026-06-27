@@ -1,5 +1,5 @@
-# Track caller: Build All Stable Artifacts (cronjob). Thin wrapper over complete-artifact-matrix.yml.
-name: "Build All Stable Artifacts (cronjob)"
+# Track caller: Build All Stable Artifacts. Thin wrapper over complete-artifact-matrix.yml.
+name: "Build All Stable Artifacts"
 
 on:
   workflow_dispatch:
