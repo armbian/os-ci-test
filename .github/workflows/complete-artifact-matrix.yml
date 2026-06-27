@@ -145,7 +145,7 @@ jobs:
       version: ${{ steps.version.outputs.version }}
 
   matrix_prep:
-    name: "JSON matrix: 17 artifact chunks, 16 image chunks"
+    name: "JSON matrix: 17/16 chunks"
     if: ${{ github.repository_owner == 'armbian' }}
     needs: [ version_prep ]
     runs-on: [ "self-hosted", "Linux", 'super' ]
