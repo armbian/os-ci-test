@@ -1,0 +1,134 @@
+# Reusable: build ONE chunk of artifacts.
+#
+# Called (once per chunk) by complete-artifact-matrix.yml via a matrix. The chunk's
+# build matrix arrives as JSON in `chunk_json`; everything board/branch-specific lives
+# inside that JSON (produced at runtime by `compile.sh gha-matrix`). This file holds the
+# artifact-build job body exactly once -- there are no per-chunk copies anywhere.
+name: "Build artifacts chunk (reusable)"
+
+on:
+  workflow_call:
+    inputs:
+      chunk_json:              { required: true,  type: string }   # fromJSON -> strategy.matrix
+      not_empty:               { required: true,  type: string }   # 'yes' if this chunk has builds
+      version:                 { required: true,  type: string }
+      build_sha1:              { required: true,  type: string }
+      build_repository:        { required: false, type: string, default: "armbian/build" }
+      userpatches_repository:  { required: false, type: string, default: "armbian/os" }
+      userpatches_ref:         { required: false, type: string, default: "main" }
+      userpatches_dir:         { required: false, type: string, default: "userpatches" }
+      extra_params_all_builds: { required: false, type: string, default: "UPLOAD_TO_OCI_ONLY=yes" }
+
+# Re-exposed as env so the step bodies read the same names as the rest of the pipeline.
+env:
+  BUILD_REPOSITORY: ${{ inputs.build_repository }}
+  USERPATCHES_REPOSITORY: ${{ inputs.userpatches_repository }}
+  USERPATCHES_REF: ${{ inputs.userpatches_ref }}
+  USERPATCHES_DIR: ${{ inputs.userpatches_dir }}
+  EXTRA_PARAMS_ALL_BUILDS: ${{ inputs.extra_params_all_builds }}
+
+jobs:
+  build:
+    if: ${{ github.repository_owner == 'armbian' && inputs.not_empty == 'yes' }}
+    strategy:
+      fail-fast: false # let other jobs try to complete if one fails
+      matrix: ${{ fromJSON(inputs.chunk_json) }}
+    name: ${{ matrix.desc || 'Empty artifact chunk' }}
+    runs-on: ${{ matrix.runs_on }}
+    steps:
+
+      - name: "Runner clean ${{ inputs.version }}"
+        uses: armbian/actions/runner-clean@main
+
+      # Login to ghcr.io, for later uploading rootfs to ghcr.io
+      - name: Docker Login to GitHub Container Registry
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: "${{ github.repository_owner }}" # GitHub username or org
+          password: "${{ secrets.GITHUB_TOKEN }}"    # GitHub actions builtin token. repo has to have pkg access.
+
+      # cleanup the place where we will clone the userpatches repo, to avoid git going insane and cleaning everything later
+      - name: Cleanup userpatches repo
+        if: ${{ ( env.USERPATCHES_REPOSITORY != '' ) && ( env.USERPATCHES_REF != '' ) }}
+        run: rm -rf userpatches.repo
+
+      - name: Checkout build repo
+        uses: actions/checkout@v6 # We don't need to clone git, really. A wget would suffice for GH-hosted runners. But using clone is better for Igor-hosted runners.
+        with:
+          repository: ${{ env.BUILD_REPOSITORY }}
+          ref: ${{ inputs.build_sha1 }}
+          fetch-depth: ${{ matrix.fdepth }}
+          clean: false # true is default. it *will* delete the hosts /dev if mounted inside.
+
+      # clone the userpatches repo (`armbian/os`)
+      - name: "Checkout userpatches repo: ${{env.USERPATCHES_REPOSITORY}}#${{env.USERPATCHES_REF}}"
+        uses: actions/checkout@v6
+        if: ${{ ( env.USERPATCHES_REPOSITORY != '' ) && ( env.USERPATCHES_REF != '' ) }}
+        with:
+          repository: ${{ env.USERPATCHES_REPOSITORY }}
+          ref: ${{ env.USERPATCHES_REF }}
+          fetch-depth: ${{ matrix.fdepth }}
+          clean: false # true is default.
+          path: userpatches.repo
+
+      - name: "Put userpatches in place, and remove userpatches repo"
+        if: ${{ ( env.USERPATCHES_REPOSITORY != '' ) && ( env.USERPATCHES_REF != '' ) }}
+        run: |
+          mkdir -pv userpatches
+          rsync -av userpatches.repo/${{env.USERPATCHES_DIR}}/. userpatches/
+          rm -rf userpatches.repo
+
+      - name: "Run only on GitHub-hosted"
+        if: ${{ runner.environment == 'github-hosted' }}
+        run: |
+          echo "GitHub-hosted runner"
+          sudo ./compile.sh requirements
+          sudo chown -R "$(id -u):$(id -g)" .
+
+      - name: "Runner info for ${{ runner.name }}"
+        run: |
+          info="$(curl -fsSL "https://github.armbian.com/servers/github-runners.jq" \
+            | jq --arg name "${{ runner.name }}" '
+                ($name | sub("-[0-9]+$"; "")) as $base
+                | first(.[] | select((.host | split(".")[0]) == $base)) // {}
+              ')"
+          echo "Runner info for ${{ runner.name }}:"
+          echo "$info"
+          echo "--- Exported environment ---"
+          for map in apt_proxy:APT_PROXY_ADDR oci_cache:GHCR_MIRROR_ADDRESS redis_cache:CCACHE_REMOTE_STORAGE git_proxy:GITPROXY_ADDRESS; do
+            key="${map%%:*}"; var="${map##*:}"
+            value="$(jq -r --arg k "$key" '.[$k] // ""' <<< "$info")"
+            echo "${var}=${value}"
+            echo "${var}=${value}" >> "$GITHUB_ENV"
+          done
+
+      - name: Build  ${{matrix.desc}}
+        timeout-minutes: 90
+        id: build
+        run: |
+          # If the runner exported a remote ccache storage, pass it on and enable the ccache-remote extension.
+          declare -a CCACHE_PARAMS=()
+          if [ -n "${CCACHE_REMOTE_STORAGE}" ]; then
+            CCACHE_PARAMS+=( "CCACHE_REMOTE_STORAGE=${CCACHE_REMOTE_STORAGE}" "ENABLE_EXTENSIONS=ccache-remote" )
+          fi
+          # Repeat on failure: retry the build up to BUILD_ATTEMPTS times to ride out transient
+          # runner/network failures. Replaces the old external watchdog cron job.
+          BUILD_ATTEMPTS="${BUILD_ATTEMPTS:-3}"
+          for attempt in $(seq 1 "$BUILD_ATTEMPTS"); do
+            echo "::group::Build attempt ${attempt}/${BUILD_ATTEMPTS}"
+            if bash ./compile.sh ${{ matrix.invocation }} REVISION="${{ inputs.version }}" SHOW_DEBUG=yes SHARE_LOG=yes "${CCACHE_PARAMS[@]}" ${{env.EXTRA_PARAMS_ALL_BUILDS}}; then
+              echo "::endgroup::"
+              exit 0
+            fi
+            echo "::endgroup::"
+            echo "::warning::build attempt ${attempt}/${BUILD_ATTEMPTS} failed"
+            [ "$attempt" -lt "$BUILD_ATTEMPTS" ] && sleep 30
+          done
+          echo "::error::build failed after ${BUILD_ATTEMPTS} attempts"
+          exit 1
+
+      - name: "Logs: ${{ steps.build.outputs.logs_url }}"
+        if: always()
+        run: |
+          echo "Logs: ${{ steps.build.outputs.logs_url }}"
