@@ -31,10 +31,6 @@ on:
         type: choice
         options: [ 'yes', 'no' ]
         default: 'yes'
-      bumpversion:
-        description: 'Bump version'
-        type: boolean
-        default: true
       versionOverride:
         description: 'Version override'
         type: string
@@ -57,5 +53,4 @@ jobs:
       skipimages_default: "yes"
       checkoci_default: "yes"
       nightlybuild_default: "yes"
-      bumpversion_default: true
     secrets: inherit

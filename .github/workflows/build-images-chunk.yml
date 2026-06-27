@@ -15,7 +15,7 @@ on:
       release_repository:      { required: true,  type: string }   # os | community | distribution
       nightlybuild:            { required: true,  type: string }   # effective 'yes' | 'no'
       build_repository:        { required: false, type: string, default: "armbian/build" }
-      userpatches_repository:  { required: false, type: string, default: "armbian/os" }
+      userpatches_repository:  { required: true,  type: string }
       userpatches_ref:         { required: false, type: string, default: "main" }
       userpatches_dir:         { required: false, type: string, default: "userpatches" }
       extra_params_all_builds: { required: false, type: string, default: "UPLOAD_TO_OCI_ONLY=yes" }
@@ -72,7 +72,7 @@ jobs:
           fetch-depth: ${{ matrix.fdepth }}
           clean: false # true is default. it *will* delete the hosts /dev if mounted inside.
 
-      # clone the userpatches repo (`armbian/os`)
+      # clone the userpatches repo (this repo)
       - name: "Checkout userpatches repo: ${{env.USERPATCHES_REPOSITORY}}#${{env.USERPATCHES_REF}}"
         uses: actions/checkout@v6
         if: ${{ ( env.USERPATCHES_REPOSITORY != '' ) && ( env.USERPATCHES_REF != '' ) }}
@@ -320,21 +320,17 @@ jobs:
           echo "# debug"
           tree output/release
 
-      - name: "Upload artefacts except .asc, .sha and .torrent"
+      - name: "Upload images to release ${{ inputs.version }}"
         timeout-minutes: 60
         if: ${{ inputs.nightlybuild == 'yes' || env.RELEASE_REPOSITORY == 'community' || env.RELEASE_REPOSITORY == 'distribution' }}
-        uses: ncipollo/release-action@v1
+        uses: softprops/action-gh-release@v2
         with:
-          repo: "${{ env.RELEASE_REPOSITORY }}"
-          tag: "${{ inputs.version }}"
-          artifacts: "output/release/output/images/*/*/Armbian_*.*"
-          omitBody: true
-          replacesArtifacts: true
-          omitName: true
-          makeLatest: false
-          omitPrereleaseDuringUpdate: true
-          allowUpdates: true
-          artifactErrorsFailBuild: true
+          repository: "armbian/${{ env.RELEASE_REPOSITORY }}"
+          tag_name: "${{ inputs.version }}"
+          files: "output/release/output/images/*/*/Armbian_*.*"
+          prerelease: ${{ inputs.nightlybuild == 'yes' }}
+          make_latest: false
+          fail_on_unmatched_files: true
           token: "${{ env.GH_TOKEN }}"
 
       - name: "Upload to servers"

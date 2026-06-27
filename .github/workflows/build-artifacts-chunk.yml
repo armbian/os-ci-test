@@ -14,7 +14,7 @@ on:
       version:                 { required: true,  type: string }
       build_sha1:              { required: true,  type: string }
       build_repository:        { required: false, type: string, default: "armbian/build" }
-      userpatches_repository:  { required: false, type: string, default: "armbian/os" }
+      userpatches_repository:  { required: true,  type: string }
       userpatches_ref:         { required: false, type: string, default: "main" }
       userpatches_dir:         { required: false, type: string, default: "userpatches" }
       extra_params_all_builds: { required: false, type: string, default: "UPLOAD_TO_OCI_ONLY=yes" }
@@ -61,7 +61,7 @@ jobs:
           fetch-depth: ${{ matrix.fdepth }}
           clean: false # true is default. it *will* delete the hosts /dev if mounted inside.
 
-      # clone the userpatches repo (`armbian/os`)
+      # clone the userpatches repo (this repo)
       - name: "Checkout userpatches repo: ${{env.USERPATCHES_REPOSITORY}}#${{env.USERPATCHES_REF}}"
         uses: actions/checkout@v6
         if: ${{ ( env.USERPATCHES_REPOSITORY != '' ) && ( env.USERPATCHES_REF != '' ) }}
