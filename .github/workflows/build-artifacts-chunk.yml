@@ -46,7 +46,10 @@ jobs:
         with:
           registry: ghcr.io
           username: "${{ github.repository_owner }}" # GitHub username or org
-          password: "${{ secrets.GITHUB_TOKEN }}"    # GitHub actions builtin token. repo has to have pkg access.
+          # OCI target is ghcr.io/armbian/os/* (framework default). The builtin GITHUB_TOKEN
+          # can only write packages this repo owns, so artifact push needs a PAT with
+          # write:packages on armbian/os. Falls back to the builtin token when unset.
+          password: "${{ secrets.ACCESS_TOKEN || secrets.GITHUB_TOKEN }}"
 
       # cleanup the place where we will clone the userpatches repo, to avoid git going insane and cleaning everything later
       - name: Cleanup userpatches repo

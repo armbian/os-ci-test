@@ -217,7 +217,9 @@ jobs:
         with:
           registry: ghcr.io
           username: "${{ github.repository_owner }}" # GitHub username or org
-          password: ${{ secrets.GITHUB_TOKEN }}  # GitHub actions builtin token. repo has to have pkg access.
+          # PAT with read+write:packages on armbian/os (OCI target = ghcr.io/armbian/os/*);
+          # builtin GITHUB_TOKEN can't write org packages. Falls back to it when unset.
+          password: ${{ secrets.ACCESS_TOKEN || secrets.GITHUB_TOKEN }}
 
       - name: Prepare Info JSON and Matrices
         id: prepare-matrix
@@ -408,7 +410,9 @@ jobs:
         with:
           registry: ghcr.io
           username: "${{ github.repository_owner }}" # GitHub username or org
-          password: "${{ secrets.GITHUB_TOKEN }}"    # GitHub actions builtin token. repo has to have pkg access.
+          # PAT with read:packages on armbian/os so the ORAS cache can pull from ghcr.io/armbian/os/*.
+          # Falls back to the builtin token when ACCESS_TOKEN is unset.
+          password: "${{ secrets.ACCESS_TOKEN || secrets.GITHUB_TOKEN }}"
 
       - name: Checkout build repo
         uses: actions/checkout@v7
