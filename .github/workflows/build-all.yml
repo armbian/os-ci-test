@@ -1,5 +1,5 @@
-# Track caller: Build All Artifacts (cronjob). Thin wrapper over complete-artifact-matrix.yml.
-name: "Build All Artifacts (cronjob)"
+# Track caller: Build All Artifacts. Thin wrapper over complete-artifact-matrix.yml.
+name: "Build All Artifacts"
 
 on:
   # No dispatch inputs: "build all artifacts" always runs with the fixed defaults
