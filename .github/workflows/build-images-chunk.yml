@@ -21,7 +21,7 @@ on:
       extra_params_all_builds: { required: false, type: string, default: "UPLOAD_TO_OCI_ONLY=yes" }
       extra_params_image:      { required: false, type: string, default: "SHARE_LOG=yes " }
     secrets:
-      ACCESS_TOKEN:                 { required: true }
+      ACCESS_TOKEN:                 { required: false }
       KEY_UPLOAD:                   { required: true }
       KNOWN_HOSTS_ARMBIAN_UPLOAD:   { required: true }
       GPG_KEY1:                     { required: false }
@@ -35,7 +35,7 @@ env:
   RELEASE_REPOSITORY: ${{ inputs.release_repository }}
   EXTRA_PARAMS_ALL_BUILDS: ${{ inputs.extra_params_all_builds }}
   EXTRA_PARAMS_IMAGE: ${{ inputs.extra_params_image }}
-  GH_TOKEN: ${{ secrets.ACCESS_TOKEN }}
+  GH_TOKEN: ${{ secrets.ACCESS_TOKEN || github.token }}
 
 jobs:
   build:
@@ -180,7 +180,7 @@ jobs:
           done
 
           # show current api rate
-          curl -s -H "Accept: application/vnd.github.v3+json" -H "Authorization: token ${{ secrets.ACCESS_TOKEN }}" https://api.github.com/rate_limit
+          curl -s -H "Accept: application/vnd.github.v3+json" -H "Authorization: token ${{ secrets.ACCESS_TOKEN || github.token }}" https://api.github.com/rate_limit
 
       - name: Import GPG key
         env:
@@ -283,7 +283,7 @@ jobs:
             if [ -n "$WEBSEEDS" ]; then
               WEBSEEDS+=","
             fi
-            WEBSEEDS+="https://github.com/armbian/${{ env.RELEASE_REPOSITORY }}/releases/download/${{ inputs.version }}/${FILE}"
+            WEBSEEDS+="https://github.com/${{ github.repository }}/releases/download/${{ inputs.version }}/${FILE}"
           fi
 
           echo "WEBSEEDS: $WEBSEEDS"
@@ -325,7 +325,7 @@ jobs:
         if: ${{ inputs.nightlybuild == 'yes' || env.RELEASE_REPOSITORY == 'community' || env.RELEASE_REPOSITORY == 'distribution' }}
         uses: softprops/action-gh-release@v2
         with:
-          repository: "armbian/${{ env.RELEASE_REPOSITORY }}"
+          repository: ${{ github.repository }}
           tag_name: "${{ inputs.version }}"
           files: "output/release/output/images/*/*/Armbian_*.*"
           prerelease: ${{ inputs.nightlybuild == 'yes' }}
