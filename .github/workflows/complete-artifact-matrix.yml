@@ -117,15 +117,6 @@ jobs:
           echo "Resolved version: ${VERSION} (prerelease=${PRERELEASE}) for ${REPO}"
           echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
           echo "prerelease=${PRERELEASE}" >> "$GITHUB_OUTPUT"
-          mkdir -p downloads
-          printf '%s\n' "${VERSION}" > downloads/version
-
-      - name: 'Upload version artifact'
-        uses: actions/upload-artifact@v7
-        with:
-          name: assets-for-download-${{ inputs.repository_ref }}
-          path: downloads
-          retention-days: 5
 
       - name: "Generate body file"
         if: ${{ (github.event.inputs.skipImages || inputs.skipimages_default) != 'yes' }}
@@ -529,23 +520,6 @@ jobs:
     needs: [ matrix_prep, build-artifacts, build-images ]
     steps:
 
-      - name: "Download all workflow run artifacts"
-        if: ${{ (github.event.inputs.skipImages || inputs.skipimages_default) != 'yes' }}
-        uses: actions/download-artifact@v8
-        with:
-          name: assets-for-download-${{ inputs.repository_ref }}
-          path: downloads
-
-      - name: "Read version"
-        run: |
-
-          echo "version=$(cat downloads/version 2>/dev/null || true)" >> $GITHUB_ENV
-
-      - uses: geekyeggo/delete-artifact@v6
-        with:
-          name: assets-for-download-${{ inputs.repository_ref }}
-          failOnError: false
-
       - name: "Keep only 30 days of workflow logs"
         uses: igorjs/gh-actions-clean-workflow@v7
         with:
@@ -553,12 +527,12 @@ jobs:
           runs_older_than: 30 # optional
           runs_to_keep: 0 # optional
 
-      - name: "Mark release ${{ env.version }} as latest"
+      - name: "Mark release ${{ needs.matrix_prep.outputs.version }} as latest"
         if: ${{ (github.event.inputs.skipImages || inputs.skipimages_default) != 'yes' && (github.event.inputs.nightlybuild || inputs.nightlybuild_default) == 'yes' }}
         uses: softprops/action-gh-release@v3
         with:
           repository: ${{ github.repository }}
-          tag_name: "${{ env.version }}"
+          tag_name: "${{ needs.matrix_prep.outputs.version }}"
           prerelease: false
           make_latest: true
           token: "${{ secrets.ACCESS_TOKEN || github.token }}"
