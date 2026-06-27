@@ -190,15 +190,6 @@ jobs:
           clean: false
           path: armbian.github.io
 
-      - name: "Checkout torrent lists"
-        uses: actions/checkout@v6
-        with:
-          repository: XIU2/TrackersListCollection
-          clean: false
-          ref: master # true is default
-          path: trackerslist
-          fetch-depth: 1
-
       - name: "grab the sha1 of the latest commit of the build repo ${{ env.BUILD_REPOSITORY }}#${{ env.BUILD_REF }}"
         id: latest-commit
         run: |
@@ -268,94 +259,29 @@ jobs:
         run: |
           echo "Logs: ${{ steps.prepare-matrix.outputs.logs_url }}"
 
-      - name: Generate server lists from NetBox (JSON)
-        id: prepare-urls
+      - name: Download server lists
         run: |
 
           set -euo pipefail
 
           mkdir -p build/output/info
+          base="https://github.armbian.com/servers"
+          dl() { curl -fsSL --connect-timeout 10 --max-time 30 --retry 5 --retry-delay 2 --retry-all-errors -o "$1" "$2"; }
 
-          # copy trackers list
-          cp trackerslist/best.txt build/output/info/best-torrent-servers.txt
+          # Server lists are published centrally (same schema NetBox used to emit).
+          # Map the published names to the names the downstream image jobs read from
+          # the build-info artifact.
+          dl build/output/info/servers-download.jq "$base/download.jq"
+          dl build/output/info/servers-cache.jq    "$base/cache.jq"
+          dl build/output/info/servers-upload.jq   "$base/upload.jq"
+          cp build/output/info/servers-download.jq build/output/info/servers.jq
+          dl build/output/info/best-torrent-servers.txt "$base/best-torrent-servers.txt"
 
-          BASE_URL="${{ secrets.NETBOX_API }}/virtualization/virtual-machines/?limit=500&name__empty=false&status=active"
-
-          # One jq filter used for all kinds – same fields everywhere
-          JQ_FILTER='
-            .results
-            | map(
-                select(.name != null)
-                | {
-                    host: .name,
-                    upload_path: (.custom_fields["path"] // ""),
-
-                    download_path_archive:
-                      ((.custom_fields["download_path_archive"] // "/archive")
-                        | if startswith("/") then . else "/" + . end),
-
-                    download_path_images:
-                      ((.custom_fields["download_path_images"] // "/dl")
-                        | if startswith("/") then . else "/" + . end),
-
-                    download_path_debs:
-                      ((.custom_fields["download_path_debs"] // "/apt")
-                        | if startswith("/") then . else "/" + . end),
-
-                    port: (.custom_fields["port"] // 22),
-                    username: (.custom_fields["username"] // "mirror")
-                  }
-              )
-            | sort_by(.host)
-          '
-
-          for kind in servers servers-download servers-cache servers-upload; do
-            case "$kind" in
-              servers)
-                # All mirrors serving images
-                url="$BASE_URL&device_role=Mirror&tag=images"
-                outfile="build/output/info/servers.jq"
-                ;;
-              servers-download)
-                # Mirrors used as HTTP download sources (webseeds)
-                url="$BASE_URL&device_role=Mirror&tag=images"
-                outfile="build/output/info/servers-download.jq"
-                ;;
-              servers-cache)
-                # Cache mirrors (can be used for HTTP + rsync)
-                url="$BASE_URL&device_role=Mirror&tag=cache"
-                outfile="build/output/info/servers-cache.jq"
-                ;;
-              servers-upload)
-                # Upload targets (SSH)
-                url="$BASE_URL&tag=upload&tag=images"
-                outfile="build/output/info/servers-upload.jq"
-                ;;
-            esac
-
-            echo "Generating $outfile from $url"
-
-            # Fetch with retries; curl handles transient failures itself.
-            # --retry-all-errors covers connection timeouts as well as 5xx.
-            response="$(curl -s --fail \
-              --connect-timeout 10 --max-time 30 \
-              --retry 5 --retry-delay 2 --retry-all-errors \
-              -H "Authorization: Token ${{ secrets.NETBOX_TOKEN }}" \
-              -H "Accept: application/json; indent=4" \
-              "$url")"
-
-            echo "$response" | jq "$JQ_FILTER" > "$outfile"
-
-            # Guard against a valid-but-empty result set: NetBox returning no
-            # matching VMs would otherwise produce an empty server list and let
-            # the build proceed with nowhere to upload/download from.
-            count="$(jq 'length' "$outfile")"
-            if [ "$count" -eq 0 ]; then
-              echo "::error::$outfile is empty (NetBox returned no '$kind' servers from $url)"
-              exit 1
-            fi
-            echo "  -> $count server(s)"
-
+          # sanity: each list must be a non-empty JSON array
+          for f in servers servers-download servers-cache servers-upload; do
+            n="$(jq 'length' "build/output/info/$f.jq")"
+            [ "$n" -gt 0 ] || { echo "::error::build/output/info/$f.jq is empty (from $base)"; exit 1; }
+            echo "  $f.jq -> $n server(s)"
           done
 
       - uses: actions/upload-artifact@v7
