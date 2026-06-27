@@ -1,0 +1,14 @@
+version: 2
+updates:
+  # Keep the GitHub Actions used by the build workflows up to date (e.g. the
+  # softprops/action-gh-release v2 -> v3 Node-runtime bump that prompted this).
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    commit-message:
+      prefix: "ci"
+    # collapse all action bumps into one PR per run to cut noise
+    groups:
+      github-actions:
+        patterns: ["*"]

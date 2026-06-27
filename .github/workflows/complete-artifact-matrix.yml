@@ -140,7 +140,7 @@ jobs:
       # Create the (empty) release up front; the image jobs attach assets to this tag.
       - name: "Create release ${{ steps.version.outputs.version }}"
         if: ${{ (github.event.inputs.skipImages || inputs.skipimages_default) != 'yes' }}
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           repository: ${{ github.repository }}
           tag_name: "${{ steps.version.outputs.version }}"
@@ -552,7 +552,7 @@ jobs:
 
       - name: "Mark release ${{ env.version }} as latest"
         if: ${{ (github.event.inputs.skipImages || inputs.skipimages_default) != 'yes' && (github.event.inputs.nightlybuild || inputs.nightlybuild_default) == 'yes' }}
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           repository: ${{ github.repository }}
           tag_name: "${{ env.version }}"
