@@ -54,7 +54,7 @@ jobs:
         run: rm -rf userpatches.repo
 
       - name: Checkout build repo
-        uses: actions/checkout@v6 # We don't need to clone git, really. A wget would suffice for GH-hosted runners. But using clone is better for Igor-hosted runners.
+        uses: actions/checkout@v7 # We don't need to clone git, really. A wget would suffice for GH-hosted runners. But using clone is better for Igor-hosted runners.
         with:
           repository: ${{ env.BUILD_REPOSITORY }}
           ref: ${{ inputs.build_sha1 }}
@@ -63,7 +63,7 @@ jobs:
 
       # clone the userpatches repo (this repo)
       - name: "Checkout userpatches repo: ${{env.USERPATCHES_REPOSITORY}}#${{env.USERPATCHES_REF}}"
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         if: ${{ ( env.USERPATCHES_REPOSITORY != '' ) && ( env.USERPATCHES_REF != '' ) }}
         with:
           repository: ${{ env.USERPATCHES_REPOSITORY }}
