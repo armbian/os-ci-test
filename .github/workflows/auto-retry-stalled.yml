@@ -30,6 +30,17 @@ on:
       - "Build Community Images"
       - "Build Standard Support Images (admin)"
     types: [ completed ]
+  # Manual trigger: re-run the failed jobs of a specific run on demand.
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: "Run ID to re-run failed jobs for (the numeric id from the run URL)"
+        type: string
+        required: true
+      ignore_threshold:
+        description: "Re-run even if more than the stall threshold failed (force)"
+        type: boolean
+        default: false
 
 permissions:
   actions: write   # required to re-run jobs
@@ -37,13 +48,12 @@ permissions:
 jobs:
   retry:
     name: "Re-run failed jobs (stall recovery)"
-    if: ${{ github.event.workflow_run.conclusion == 'failure' && github.event.workflow_run.run_attempt < 2 }}
+    # Auto: only on a build run that failed, first attempt (so a real failure still
+    # surfaces after one retry). Manual: always runs (the operator chose this run).
+    if: ${{ github.event_name == 'workflow_dispatch' || (github.event.workflow_run.conclusion == 'failure' && github.event.workflow_run.run_attempt < 2) }}
     runs-on: ubuntu-latest
     env:
       GH_TOKEN: ${{ secrets.ACCESS_TOKEN || github.token }}
-      RUN_ID: ${{ github.event.workflow_run.id }}
-      ATTEMPT: ${{ github.event.workflow_run.run_attempt }}
-      RUN_NAME: ${{ github.event.workflow_run.name }}
       # Up to this many failed jobs is treated as transient runner stalls and retried.
       # More than this is treated as systemic and left red (raise/lower to taste).
       MAX_FAILED_TO_RETRY: "15"
@@ -52,22 +62,33 @@ jobs:
         run: |
           set -euo pipefail
 
+          # Resolve the target run + whether to bypass the threshold, per trigger.
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            RUN_ID="${{ inputs.run_id }}"
+            IGNORE_THRESHOLD="${{ inputs.ignore_threshold }}"
+            echo "Manual dispatch -> run ${RUN_ID} (ignore_threshold=${IGNORE_THRESHOLD})."
+          else
+            RUN_ID="${{ github.event.workflow_run.id }}"
+            IGNORE_THRESHOLD="false"
+            echo "Auto -> run '${{ github.event.workflow_run.name }}' #${RUN_ID} (attempt ${{ github.event.workflow_run.run_attempt }})."
+          fi
+
           # Count failed jobs in the latest attempt (paginate; runs can have 200+ jobs).
           failed="$(gh api --paginate "repos/${GITHUB_REPOSITORY}/actions/runs/${RUN_ID}/jobs" \
             --jq '[.jobs[] | select(.conclusion == "failure")] | length' \
             | awk '{ s += $1 } END { print s + 0 }')"
 
-          echo "Run '${RUN_NAME}' #${RUN_ID} (attempt ${ATTEMPT}) -> ${failed} failed job(s)."
+          echo "Run ${RUN_ID} -> ${failed} failed job(s)."
 
           if [ "$failed" -eq 0 ]; then
-            echo "No failed jobs (failure was a cancellation/startup error) — nothing to re-run."
+            echo "No failed jobs — nothing to re-run."
             exit 0
           fi
 
-          if [ "$failed" -gt "${MAX_FAILED_TO_RETRY}" ]; then
-            echo "::warning title=Not auto-retrying::${failed} failed jobs (> ${MAX_FAILED_TO_RETRY}) looks systemic, not a runner stall. Leaving it red — please inspect run ${RUN_ID}."
+          if [ "$IGNORE_THRESHOLD" != "true" ] && [ "$failed" -gt "${MAX_FAILED_TO_RETRY}" ]; then
+            echo "::warning title=Not auto-retrying::${failed} failed jobs (> ${MAX_FAILED_TO_RETRY}) looks systemic, not a runner stall. Leaving it red — re-run manually with ignore_threshold=true to force. Inspect run ${RUN_ID}."
             exit 0
           fi
 
-          echo "${failed} failed job(s) (<= ${MAX_FAILED_TO_RETRY}) — re-running failed jobs once."
+          echo "${failed} failed job(s) — re-running failed jobs."
           gh run rerun "${RUN_ID}" --failed --repo "${GITHUB_REPOSITORY}"
