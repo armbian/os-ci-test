@@ -1,0 +1,73 @@
+# Watchdog: auto-retry runs killed by runner stalls.
+#
+# Self-hosted runners occasionally drop communication mid-job — the build itself is
+# green, but the job dies at a random later step (e.g. "Logs:", "Upload to servers")
+# and the whole run is marked failed. Those stalls hit different stages on different
+# runners, so no per-step hardening fixes them; the only robust recovery is a run-level
+# re-run of just the failed jobs.
+#
+# This fires when a build run finishes 'failure' and re-runs ONLY its failed jobs, once.
+# Guards:
+#   * run_attempt < 2      -> at most ONE automatic retry, so a genuine failure still
+#                             surfaces (red) after a single retry instead of looping.
+#   * failed <= X (15)     -> a handful of failures looks like stalls -> retry. Many
+#                             failures looks systemic (bad commit / infra outage) -> do
+#                             NOT mass-retry; leave it red and warn for a human.
+#
+# Note: we wait for the run to finish rather than cancelling it mid-flight. The build
+# chunks are fail-fast:false, so the good jobs complete and produce artifacts even while
+# a few stall; cancelling would discard that work and turn every in-progress/queued job
+# into 'cancelled', which "re-run failed" would then restart wholesale.
+name: "Auto-retry stalled runs"
+
+on:
+  workflow_run:
+    workflows:
+      - "Build Nightly Images"
+      - "Build All Artifacts"
+      - "Build All Stable Artifacts"
+      - "Build Apps Images"
+      - "Build Community Images"
+      - "Build Standard Support Images (admin)"
+    types: [ completed ]
+
+permissions:
+  actions: write   # required to re-run jobs
+
+jobs:
+  retry:
+    name: "Re-run failed jobs (stall recovery)"
+    if: ${{ github.event.workflow_run.conclusion == 'failure' && github.event.workflow_run.run_attempt < 2 }}
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ secrets.ACCESS_TOKEN || github.token }}
+      RUN_ID: ${{ github.event.workflow_run.id }}
+      ATTEMPT: ${{ github.event.workflow_run.run_attempt }}
+      RUN_NAME: ${{ github.event.workflow_run.name }}
+      # Up to this many failed jobs is treated as transient runner stalls and retried.
+      # More than this is treated as systemic and left red (raise/lower to taste).
+      MAX_FAILED_TO_RETRY: "15"
+    steps:
+      - name: "Re-run failed jobs if the failure count looks like stalls"
+        run: |
+          set -euo pipefail
+
+          # Count failed jobs in the latest attempt (paginate; runs can have 200+ jobs).
+          failed="$(gh api --paginate "repos/${GITHUB_REPOSITORY}/actions/runs/${RUN_ID}/jobs" \
+            --jq '[.jobs[] | select(.conclusion == "failure")] | length' \
+            | awk '{ s += $1 } END { print s + 0 }')"
+
+          echo "Run '${RUN_NAME}' #${RUN_ID} (attempt ${ATTEMPT}) -> ${failed} failed job(s)."
+
+          if [ "$failed" -eq 0 ]; then
+            echo "No failed jobs (failure was a cancellation/startup error) — nothing to re-run."
+            exit 0
+          fi
+
+          if [ "$failed" -gt "${MAX_FAILED_TO_RETRY}" ]; then
+            echo "::warning title=Not auto-retrying::${failed} failed jobs (> ${MAX_FAILED_TO_RETRY}) looks systemic, not a runner stall. Leaving it red — please inspect run ${RUN_ID}."
+            exit 0
+          fi
+
+          echo "${failed} failed job(s) (<= ${MAX_FAILED_TO_RETRY}) — re-running failed jobs once."
+          gh run rerun "${RUN_ID}" --failed --repo "${GITHUB_REPOSITORY}"
