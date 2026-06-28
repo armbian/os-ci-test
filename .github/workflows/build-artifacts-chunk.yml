@@ -33,7 +33,7 @@ jobs:
     strategy:
       fail-fast: false # let other jobs try to complete if one fails
       matrix: ${{ fromJSON(inputs.chunk_json) }}
-    name: ${{ matrix.desc || 'Empty artifact chunk' }}
+    name: ${{ matrix.name || matrix.desc || 'Empty artifact chunk' }}
     runs-on: ${{ matrix.runs_on }}
     steps:
 
