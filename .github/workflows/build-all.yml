@@ -2,12 +2,16 @@
 name: "Build All Artifacts"
 
 on:
-  # No dispatch inputs: "build all artifacts" always runs with the fixed defaults
-  # below (skipImages=yes, checkOci=yes, nightlybuild=yes, framework branch=main,
-  # no targets filter, no version override) — nothing to select or override.
-  # complete-artifact-matrix.yml reads each as `github.event.inputs.X || <default>`,
-  # so with no inputs it falls back to exactly those values.
+  # Only the framework build branch is exposed. Everything else (skipImages=yes,
+  # checkOci=yes, nightlybuild=yes, no targets filter, no version override) is fixed
+  # via the *_default / empty fallbacks complete-artifact-matrix.yml reads, so a
+  # plain run still uses exactly those values.
   workflow_dispatch:
+    inputs:
+      branch:
+        description: 'Framework build branch'
+        type: string
+        default: 'main'
 
 concurrency:
   group: pipeline
