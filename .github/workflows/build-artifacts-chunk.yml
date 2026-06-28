@@ -136,7 +136,7 @@ jobs:
           fi
           # Repeat on failure: retry the build up to BUILD_ATTEMPTS times to ride out transient
           # runner/network failures. Replaces the old external watchdog cron job.
-          BUILD_ATTEMPTS="${BUILD_ATTEMPTS:-8}"
+          BUILD_ATTEMPTS="${BUILD_ATTEMPTS:-3}"
           for attempt in $(seq 1 "$BUILD_ATTEMPTS"); do
             echo "::group::Build attempt ${attempt}/${BUILD_ATTEMPTS}"
             if bash ./compile.sh ${{ matrix.invocation }} REVISION="${{ inputs.version }}" SHOW_DEBUG=yes SHARE_LOG=yes "${CCACHE_PARAMS[@]}" ${{env.EXTRA_PARAMS_ALL_BUILDS}}; then
