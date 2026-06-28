@@ -102,6 +102,14 @@ jobs:
           for map in apt_proxy:APT_PROXY_ADDR oci_cache:GHCR_MIRROR_ADDRESS redis_cache:CCACHE_REMOTE_STORAGE git_proxy:GITPROXY_ADDRESS; do
             key="${map%%:*}"; var="${map##*:}"
             value="$(jq -r --arg k "$key" '.[$k] // ""' <<< "$info")"
+            # apt proxy: only export if it actually answers. A stale/wrong github-runners.jq
+            # entry would otherwise route every apt-get through a dead apt-cacher-ng. Probe
+            # it; if it doesn't respond, clear it so the build goes direct instead of hanging.
+            if [ "$var" = "APT_PROXY_ADDR" ] && [ -n "$value" ] \
+               && ! curl -fsS --max-time 3 "http://${value}/acng-report.html" >/dev/null 2>&1; then
+              echo "::warning::apt proxy ${value} unreachable from ${{ runner.name }} — going direct"
+              value=""
+            fi
             echo "${var}=${value}"
             echo "${var}=${value}" >> "$GITHUB_ENV"
           done
