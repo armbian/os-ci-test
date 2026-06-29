@@ -30,6 +30,7 @@ env:
 jobs:
   build:
     if: ${{ github.repository_owner == 'armbian' && inputs.not_empty == 'yes' }}
+    timeout-minutes: 35    # kernel<=18m, uboot<=15m in practice; +OCI push/housekeeping
     strategy:
       fail-fast: false # let other jobs try to complete if one fails
       matrix: ${{ fromJSON(inputs.chunk_json) }}
@@ -126,7 +127,7 @@ jobs:
           done
 
       - name: Build  ${{matrix.desc}}
-        timeout-minutes: 90
+        timeout-minutes: 30    # package/kernel build; longer = stalled
         id: build
         run: |
           # If the runner exported a remote ccache storage, pass it on and enable the ccache-remote extension.
