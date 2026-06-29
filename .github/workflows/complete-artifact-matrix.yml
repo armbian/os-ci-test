@@ -37,7 +37,10 @@ env:
   USERPATCHES_REF: "main"
   USERPATCHES_DIR: "userpatches"
   RELEASE_REPOSITORY: "${{ inputs.release_repository }}"
-  DOCKER_SKIP_UPDATE: "yes"
+  # DOCKER_SKIP_UPDATE=yes skips pulling/updating the Docker image, risking very
+  # outdated binaries; "no" pulls & rebuilds the Dockerfile (hits cache most of the
+  # time, safer).
+  DOCKER_SKIP_UPDATE: "no"
   EXTRA_PARAMS_ALL_BUILDS: "${{ github.event.inputs.extraParamsAllBuilds || 'UPLOAD_TO_OCI_ONLY=yes' }}"
   TARGET_PATH: "${{ inputs.target_path }}"
   GH_TOKEN: "${{ secrets.ACCESS_TOKEN || github.token }}"
