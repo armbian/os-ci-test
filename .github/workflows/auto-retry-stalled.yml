@@ -8,9 +8,10 @@
 #
 # This fires when a build run finishes 'failure' and re-runs ONLY its failed jobs, once.
 # Guards:
-#   * run_attempt < 2      -> at most ONE automatic retry, so a genuine failure still
-#                             surfaces (red) after a single retry instead of looping.
-#   * failed <= X (15)     -> a handful of failures looks like stalls -> retry. Many
+#   * run_attempt < 10     -> up to 9 automatic retries. GitHub-side flakiness comes
+#                             in bursts, so give it a wide budget before a run is left
+#                             red; a genuine failure still surfaces once the budget's spent.
+#   * failed <= X (30)     -> a handful of failures looks like stalls -> retry. Many
 #                             failures looks systemic (bad commit / infra outage) -> do
 #                             NOT mass-retry; leave it red and warn for a human.
 #
@@ -48,15 +49,15 @@ permissions:
 jobs:
   retry:
     name: "Re-run failed jobs (stall recovery)"
-    # Auto: only on a build run that failed, first attempt (so a real failure still
-    # surfaces after one retry). Manual: always runs (the operator chose this run).
-    if: ${{ github.event_name == 'workflow_dispatch' || (github.event.workflow_run.conclusion == 'failure' && github.event.workflow_run.run_attempt < 2) }}
+    # Auto: only on a build run that failed, while retry budget is left (so a real
+    # failure still surfaces once spent). Manual: always runs (the operator chose this run).
+    if: ${{ github.event_name == 'workflow_dispatch' || (github.event.workflow_run.conclusion == 'failure' && github.event.workflow_run.run_attempt < 10) }}
     runs-on: ubuntu-latest
     env:
       GH_TOKEN: ${{ secrets.ACCESS_TOKEN || github.token }}
       # Up to this many failed jobs is treated as transient runner stalls and retried.
       # More than this is treated as systemic and left red (raise/lower to taste).
-      MAX_FAILED_TO_RETRY: "15"
+      MAX_FAILED_TO_RETRY: "30"
     steps:
       - name: "Re-run failed jobs if the failure count looks like stalls"
         run: |
